@@ -50,7 +50,7 @@ fa chromosome indexer
 """
 
 def fa_chr_index(file):
-    fai = open(file + ".fai", "w")
+    fai = open(file + ".hs.fai", "w")
     with open(file, "r") as f:
         line = f.readline()
         while line:
@@ -123,3 +123,26 @@ def get_distance_to_nearest_exon(genomic_position_str, gtf_path):
                 # Return the distance to the nearest exon
             #if not line:
     return min_distance_absolute
+
+'''
+bwa-mem index creator
+'''
+
+def bwa_mem_index(file):
+    import os
+    index_folder = file.split("/")[-1]
+    index_folder = index_folder.split(".")[0]
+    path = "."
+    if len(file.split("/")) > 1:  
+        path = "/".join(file.split("/")[:-1]) + "/" + index_folder
+
+    print("\n" + path)
+    print(index_folder)
+    if not os.path.exists(path):
+        command = "mkdir " + path
+        os.system(command)
+    
+    command = "cp " + file + " " + path
+    os.system(command)
+    command = "bwa-mem2 index " + path + "/" + file.split("/")[-1]
+    os.system(command)

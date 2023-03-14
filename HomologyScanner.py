@@ -7,7 +7,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 parser = argparse.ArgumentParser(
-    description="TODO"
+    description="This program calculates the homology level of genomic positions on an input sequence (in FASTA format) and a window around the position (which can be assumed to be the length of the reads),\
+          generating a score that indicates the probability of read mismapping. The homology level is calculated using the output of BLAT (Conda version). \
+            This program also has a simulation mode (currently only available for a single position) that allows you to generate a number 'n' of reads at the requested position (twice the window size) with the same length as the window.\
+                  Afterwards, these reads are randomly mutated by introducing a number of mutations that respects the following ratio: 100bp/3mut. These newly generated reads are then mapped using BWA-MEM2, and the ratios between the number of correctly mapped reads versus those mismapped or unmapped are calculated."
 )
 
 parser.add_argument(
@@ -32,7 +35,8 @@ parser.add_argument(
     "--input_file",
     type=str,
     default=None,
-    help="tab-separated file with the position to check, one position per line example: \"1 1234\", if provided check the homology score for all the position in the file."
+    help="tab-separated file with the position to check, one position per line example: \"1 1234\", \
+        if provided check the homology score for all the position in the file."
 )
 
 parser.add_argument(
@@ -46,7 +50,7 @@ parser.add_argument(
 parser.add_argument(
     "-p",
     "--position",
-    type=str,
+    type=int,
     default=None,
     help="position to check"
 )
@@ -81,6 +85,40 @@ parser.add_argument(
     action='store_true',
     default=None,
     help="fasta index chromosome generator"
+)
+
+parser.add_argument(
+    "-R",
+    "--read_generation_mode",
+    action='store_true',
+    default=None,
+    help="If the read generation mode is set to true, the program will generate reads of the specified window length from the queried position (default 1000) and introduce random mutations (3-100 bp) into them. \
+        The resulting reads will be mapped (bwa-mem2) onto the reference genome specified by the -r argument, and the program will output the percentage of reads that were not correctly mapped.\
+        Enabled only if -c and -p arguments are provided"
+)
+
+parser.add_argument(
+    "-n_reads",
+    "--reads_number",
+    type=int,
+    default=1000,
+    help="Number of read that have to be generated (default 1000)."
+)
+
+parser.add_argument(
+    "-bwa",
+    "--bwamem_index_generator_mode",
+    action="store_true",
+    default=None,
+    help="bwa-mem index creator function, if true the program creates a folder with the index necessary to run bwa-mem required with the 'read generation mode' on."
+)
+
+parser.add_argument(
+    "-bwa_i",
+    "--bwamem_index",
+    action="store_true",
+    default=None,
+    help="bwa-mem index creator function, if true the program creates a folder with the index necessary to run bwa-mem required with the 'read generation mode' on."
 )
 
 '''
@@ -119,17 +157,17 @@ endMessage = """
 ================================================================================================================================================
 Thanks for using...
 
-'   /$$   /$$                                   /$$                                      /$$$$$$                                                             
-'  | $$  | $$                                  | $$                                     /$$__  $$                                                            
-'  | $$  | $$  /$$$$$$  /$$$$$$/$$$$   /$$$$$$ | $$  /$$$$$$   /$$$$$$  /$$   /$$      | $$  \__/  /$$$$$$$  /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$   /$$$$$$ 
-'  | $$$$$$$$ /$$__  $$| $$_  $$_  $$ /$$__  $$| $$ /$$__  $$ /$$__  $$| $$  | $$      |  $$$$$$  /$$_____/ |____  $$| $$__  $$| $$__  $$ /$$__  $$ /$$__  $$
-'  | $$__  $$| $$  \ $$| $$ \ $$ \ $$| $$  \ $$| $$| $$  \ $$| $$  \ $$| $$  | $$       \____  $$| $$        /$$$$$$$| $$  \ $$| $$  \ $$| $$$$$$$$| $$  \__/
-'  | $$  | $$| $$  | $$| $$ | $$ | $$| $$  | $$| $$| $$  | $$| $$  | $$| $$  | $$       /$$  \ $$| $$       /$$__  $$| $$  | $$| $$  | $$| $$_____/| $$      
-'  | $$  | $$|  $$$$$$/| $$ | $$ | $$|  $$$$$$/| $$|  $$$$$$/|  $$$$$$$|  $$$$$$$      |  $$$$$$/|  $$$$$$$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$$| $$      
-'  |__/  |__/ \______/ |__/ |__/ |__/ \______/ |__/ \______/  \____  $$ \____  $$       \______/  \_______/ \_______/|__/  |__/|__/  |__/ \_______/|__/      
-'                                                             /$$  \ $$ /$$  | $$                                                                            
-'                                                            |  $$$$$$/|  $$$$$$/                                                                            
-'                                                             \______/  \______/  
+   /$$   /$$                                   /$$                                      /$$$$$$                                                             
+  | $$  | $$                                  | $$                                     /$$__  $$                                                            
+  | $$  | $$  /$$$$$$  /$$$$$$/$$$$   /$$$$$$ | $$  /$$$$$$   /$$$$$$  /$$   /$$      | $$  \__/  /$$$$$$$  /$$$$$$  /$$$$$$$  /$$$$$$$   /$$$$$$   /$$$$$$ 
+  | $$$$$$$$ /$$__  $$| $$_  $$_  $$ /$$__  $$| $$ /$$__  $$ /$$__  $$| $$  | $$      |  $$$$$$  /$$_____/ |____  $$| $$__  $$| $$__  $$ /$$__  $$ /$$__  $$
+  | $$__  $$| $$  \ $$| $$ \ $$ \ $$| $$  \ $$| $$| $$  \ $$| $$  \ $$| $$  | $$       \____  $$| $$        /$$$$$$$| $$  \ $$| $$  \ $$| $$$$$$$$| $$  \__/
+  | $$  | $$| $$  | $$| $$ | $$ | $$| $$  | $$| $$| $$  | $$| $$  | $$| $$  | $$       /$$  \ $$| $$       /$$__  $$| $$  | $$| $$  | $$| $$_____/| $$      
+  | $$  | $$|  $$$$$$/| $$ | $$ | $$|  $$$$$$/| $$|  $$$$$$/|  $$$$$$$|  $$$$$$$      |  $$$$$$/|  $$$$$$$|  $$$$$$$| $$  | $$| $$  | $$|  $$$$$$$| $$      
+  |__/  |__/ \______/ |__/ |__/ |__/ \______/ |__/ \______/  \____  $$ \____  $$       \______/  \_______/ \_______/|__/  |__/|__/  |__/ \_______/|__/      
+                                                             /$$  \ $$ /$$  | $$                                                                            
+                                                            |  $$$$$$/|  $$$$$$/                                                                            
+                                                             \______/  \______/  
 
 ================================================================================================================================================"""
 
@@ -143,9 +181,20 @@ def main():
             support_functions.fa_chr_index(args.reference)
         print ("Index generated! Exiting...")
         sys.exit()
+
+    if args.bwamem_index_generator_mode == True:
+        print("BWA-MEM index generator mode, this mode disable all other parameters!")
+        print("ATTENTION BWA-MEM INDEX REQUIRES A LARGE AMOUNT RAM (FOR HG19 AT LEAST 18 GB) AND FREE DISK SPACE (12-15 GB)")
+        with support_functions.Spinner():
+            support_functions.bwa_mem_index(args.reference)
+        print ("Index generated! Exiting...")
+        sys.exit()
     
+    if args.window < 33:
+        raise ValueError("Please ensure that the window size is a minimum of 33 bases.") # error to have at least a mutation per read generated
+
     '''
-    # DEV mode
+    # NOT WORKING
 
     if args.ooc_blat_generator == True:
         print("over-occurring 11-mers generator mode, this mode disable all other parameters!")
@@ -168,15 +217,28 @@ def main():
 
     # -c and -p
     if args.input_file is None and args.chromosome is not None and args.position is not None:
-        with support_functions.Spinner():
-            query = scanner.get_bases(args.reference, args.chromosome, args.position, args.window)
-        
         with open(input_fa, "w") as file_to_query:
-            file_to_query.write(">query_" + args.chromosome + "_" + args.position + "_" + str(args.window) + "\n" + query)
+            with support_functions.Spinner():
+                if args.fasta_index is None:
+                    start = time()
+                    query = scanner.get_bases(args.reference, args.chromosome, args.position, args.window)
+                    end = time()
+                else:
+                    start = time()
+                    query = scanner.get_bases_wIndex(args.reference, args.chromosome, args.position, args.window, args.fasta_index)
+                    end = time()
+            print("elapsed time: " + str(round(end - start, 2)) + "s")
+            file_to_query.write(">query_" + args.chromosome + "_" + str(args.position) + "_" + str(args.window) + "\n" + query)
         
+        if args.read_generation_mode == True:
+            print("Read Generator mode...")
+            with support_functions.Spinner():
+                scanner.fastq_gen("input.fa", args.reads_number, args.window) # TODO
+
         scanner.blat_launcher(args.reference, input_fa, args.blat_output_prefix)
 
         # score
+
         with support_functions.Spinner():
             position_dict = scanner.get_blat_info(args.blat_output_prefix)
         
@@ -190,6 +252,8 @@ def main():
                 if len(position_dict[position]) > 1:
                     for homology_region in position_dict[position]:
                         if homology_region[0] == args.window * 2 and homology_region[1] == "0": # skip queried position
+                            continue
+                        elif "_" in homology_region[2]: # skip special chromosomes e.g. chrUn_gl000212
                             continue
                     else:
                         match_list.append(homology_region[0])
@@ -248,6 +312,8 @@ def main():
                 if len(position_dict[position]) > 1:
                     for homology_region in position_dict[position]:
                         if homology_region[0] == args.window * 2 and homology_region[1] == "0": # skip queried position
+                            continue
+                        elif "_" in homology_region[2]: # skip special chromosomes e.g. chrUn_gl000212
                             continue
                     else:
                         match_list.append(homology_region[0])

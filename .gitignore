@@ -3,4 +3,7 @@
 .DS_Store
 
 # non repofiles
-not_in_repository/*
+not_in_repository/
+not_in_repository/fastq_generator/
+junk/
+.vscode
