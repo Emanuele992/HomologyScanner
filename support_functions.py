@@ -146,3 +146,8 @@ def bwa_mem_index(file):
     os.system(command)
     command = "bwa-mem2 index " + path + "/" + file.split("/")[-1]
     os.system(command)
+
+def write_coordinates(chromosome: str, start_pos: str, end_pos: str, filename: str) -> None:
+    with open(filename + ".txt", "w") as output:
+        for i in range(int(start_pos),int(end_pos)):
+            output.write(chromosome + "\t" + str(i) + "\n")

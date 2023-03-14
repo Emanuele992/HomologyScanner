@@ -129,4 +129,74 @@ def fastq_gen(fasta, n_reads, window):
     system(command)
     #command = "rm fake.fastq"
 
+'''
+MAPPER
+'''
+
+def mapper(bwa_path: str, t: int) -> None:
+    import os
+
+    fastq = "fake_mutated.fastq.gz"
+    if not os.path.isfile(fastq):
+        print("gzipping...")
+        os.system(f"gzip {fastq[:-3]}")
+    
+    bam_file = f"{fastq[:-3]}.bam"
+    sorted_bam = f"{fastq[:-3]}_sorted.bam"
+    sorted_bai = f"{fastq[:-3]}_sorted.bai"
+    sorted_bed = f"{fastq[:-3]}_sorted.bed"
+
+    # bwa mem -M -t 8 $BWA ${fastq}.gz > ${fastq%.*}.bam --> Reference command!
+    bwa_command = f"bwa mem -M -t {t} {bwa_path} {fastq} > {bam_file}"
+    print("Launching bwa-mem...")
+    os.system(bwa_command)
+    print("Done!")
+
+    # picard SortSam I=${fastq%.*}.bam O=${fastq%.*}_sorted.bam SORT_ORDER=coordinate --> Reference command!
+    sort_command = f"picard SortSam I={bam_file} O={sorted_bam} SORT_ORDER=coordinate"
+    print("Sorting...")
+    os.system(sort_command)
+    print("Done!")
+
+    # picard BuildBamIndex I=${fastq%.*}_sorted.bam O=${fastq%.*}_sorted.bai VALIDATION_STRINGENCY=LENIENT
+    index_command = f"picard BuildBamIndex I={sorted_bam} O={sorted_bai} SORT_ORDER=coordinate"
+    print("Creating bam index (for IGV/UCSC visualization)...")
+    os.system(index_command)
+    print("Done!")
+
+    # bamToBed -i ${fastq%.*}_sorted.bam > ${fastq%.*}_sorted.bed
+    print("converting bam to bed...")
+    bed_command = f"bamToBed -i {sorted_bam} > {sorted_bed}"
+    os.system(bed_command)
+    print("Done!")
+
+def read_counter(bed_file, chromosome: str, position: int, window: int) -> None:
+
+    def mean(numbers):
+            if (len(numbers) == 0):
+                return "NA"
+            total = 0
+            for x in numbers:
+                total += x
+
+            return round(total/len(numbers), 2)
+
+
+    with open(bed_file, "r") as bed:
+        results = []
+        count_mapped = 0
+        count_mismapped = 0
+        mapped_qual = []
+        mismapped_qual = []
+        for line in bed:
+            coordinates = line.strip().split("\t")[0:3]
+            mapping_quality = line.strip().split("\t")[-2]
+            if coordinates[0] == chromosome and position in range(int(coordinates[1]), int(coordinates[2])):
+                count_mapped += 1
+                mapped_qual.append(int(mapping_quality))
+            else:
+                count_mismapped += 1
+                mismapped_qual.append(int(mapping_quality))
+        results = [count_mapped, count_mismapped, mean(mapped_qual), mean(mismapped_qual), round((count_mismapped/(count_mapped + count_mismapped))*100, 2)]
+        return(results)
 

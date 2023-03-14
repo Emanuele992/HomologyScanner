@@ -106,7 +106,7 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "-bwa",
+    "-BWA",
     "--bwamem_index_generator_mode",
     action="store_true",
     default=None,
@@ -114,11 +114,19 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "-bwa_i",
+    "-bwa",
     "--bwamem_index",
-    action="store_true",
+    action=str,
     default=None,
-    help="bwa-mem index creator function, if true the program creates a folder with the index necessary to run bwa-mem required with the 'read generation mode' on."
+    help="bwa-mem index path. /path/to/bwa-mem_index/build_folder/build"
+)
+
+parser.add_argument(
+    "-t",
+    "--treads",
+    action=int,
+    default=4,
+    help="number of tread/cpus available."
 )
 
 '''
@@ -233,7 +241,24 @@ def main():
         if args.read_generation_mode == True:
             print("Read Generator mode...")
             with support_functions.Spinner():
-                scanner.fastq_gen("input.fa", args.reads_number, args.window) # TODO
+                scanner.fastq_gen("input.fa", args.reads_number, args.window) 
+
+            print("...fastq generated!")
+
+            if args.bwamem_index is None:
+                print("bwa-mem index missing... assuming reference path...")
+                index_folder = args.reference.split("/")[-1]
+                index_folder = index_folder.split(".")[0]
+                bwa =  args.reference + "/" + index_folder
+                print(bwa)
+                sys.exit()
+
+            with support_functions.Spinner():
+                scanner.mapper(bwa, args.treads)
+
+            sequencing_results = []
+            with support_functions.Spinner():
+                sequencing_results = scanner.read_counter("fake_mutated.fastq.bed", args.chromosome, args.position, args.window)
 
         scanner.blat_launcher(args.reference, input_fa, args.blat_output_prefix)
 
@@ -261,12 +286,12 @@ def main():
                     
                     print("position (chr,position,window): " + ",".join(position.split("_")[1:len(position.split("_"))]), end = "... ")
                     score = scanner.homology_score_calculator(match_list, mismatch_list, args.window)
-                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score) + "\n")
+                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score) + "\t" + "\t".join(sequencing_results) + "\n")
                     match_list = []
                     mismatch_list = []
                 else:
                     print("position (chr,position,window): " + ",".join(position.split("_")[1:len(position.split("_"))]), end = "... ")
-                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t0\n")
+                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + "0" + "\t" + "\t".join(sequencing_results) + "\n")
                 
                 print("Done!")
 
@@ -274,7 +299,7 @@ def main():
     # -f
     if args.input_file is not None and args.chromosome is None and args.position is None:
         file_to_query = open(input_fa, "w")
-        print("file provided! message to put here!")
+        print("file provided!")
         
         with open(args.input_file) as position_list:
             for line in position_list:

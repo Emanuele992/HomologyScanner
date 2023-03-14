@@ -1,10 +1,4 @@
 import sys
+from support_functions import write_coordinates
 
-chromosome = sys.argv[1]
-start_pos = sys.argv[2]
-end_pos = sys.argv[3]
-filename = sys.argv[4]
-
-with open(filename + ".txt", "w") as output:
-    for i in range(int(start_pos),int(end_pos)):
-        output.write(chromosome + "\t" + str(i) + "\n")
+write_coordinates(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
