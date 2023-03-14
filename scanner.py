@@ -159,7 +159,7 @@ def mapper(bwa_path: str, t: int) -> None:
     print("Done!")
 
     # picard BuildBamIndex I=${fastq%.*}_sorted.bam O=${fastq%.*}_sorted.bai VALIDATION_STRINGENCY=LENIENT
-    index_command = f"picard BuildBamIndex I={sorted_bam} O={sorted_bai} SORT_ORDER=coordinate"
+    index_command = f"picard BuildBamIndex I={sorted_bam} O={sorted_bai} VALIDATION_STRINGENCY=LENIENT"
     print("Creating bam index (for IGV/UCSC visualization)...")
     os.system(index_command)
     print("Done!")

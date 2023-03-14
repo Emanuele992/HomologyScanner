@@ -116,7 +116,7 @@ parser.add_argument(
 parser.add_argument(
     "-bwa",
     "--bwamem_index",
-    action=str,
+    type=str,
     default=None,
     help="bwa-mem index path. /path/to/bwa-mem_index/build_folder/build"
 )
@@ -124,7 +124,7 @@ parser.add_argument(
 parser.add_argument(
     "-t",
     "--treads",
-    action=int,
+    type=int,
     default=4,
     help="number of tread/cpus available."
 )
@@ -254,7 +254,7 @@ def main():
                 sys.exit()
 
             with support_functions.Spinner():
-                scanner.mapper(bwa, args.treads)
+                scanner.mapper(args.bwamem_index, args.treads)
 
             sequencing_results = []
             with support_functions.Spinner():
@@ -286,12 +286,12 @@ def main():
                     
                     print("position (chr,position,window): " + ",".join(position.split("_")[1:len(position.split("_"))]), end = "... ")
                     score = scanner.homology_score_calculator(match_list, mismatch_list, args.window)
-                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score) + "\t" + "\t".join(sequencing_results) + "\n")
+                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score) + "\t" + "\t".join(map(str, sequencing_results)) + "\n")
                     match_list = []
                     mismatch_list = []
                 else:
                     print("position (chr,position,window): " + ",".join(position.split("_")[1:len(position.split("_"))]), end = "... ")
-                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + "0" + "\t" + "\t".join(sequencing_results) + "\n")
+                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + "0" + "\t" + "\t".join(map(str, sequencing_results)) + "\n")
                 
                 print("Done!")
 
