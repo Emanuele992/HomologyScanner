@@ -6,4 +6,6 @@
 not_in_repository/
 not_in_repository/fastq_generator/
 junk/
+temporary/
 .vscode
+.Rproj.user

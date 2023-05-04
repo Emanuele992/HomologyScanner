@@ -1,12 +1,5 @@
 '''
-Funzione per ottenere i/il fasta della/e sequenza/e da analizzare con blat
-la funzione così com'è non va bene è troppo lenta (circa 22/23 sec per query da 150bp per 37 positioni 13.45 min troppissimo)
-vanno provate due soluzioni:
-    1. funzione seek di python puntando ai bit pos cromosomica start (query - window) --> pos cromosomica end (query + window)
-        f.seek(n bit, from what (0 beginning file, 1 current position, 2 end of file)) 
-            --> qualcosa tipo f.seek((position-window) - (position-window)/50 (per non contare i \n), 1 dove 1 è l'inizio della riga dopo aver trovato il chr giusto)
-        f.tell() tell where you are (absolutely) not so useful honestly
-    2. awk ma non ho ancora idea di come.
+The get_bases_wIndex function returns a string representing the genomic sequence from the FASTA file around the queried position, where the length of the sequence is specified by n_bases. The sequence is centered around the queried position, with n_bases bases on either side.
 '''
 
 def get_bases_wIndex(file_path, chromosome, position, n_bases, fai):
@@ -14,21 +7,35 @@ def get_bases_wIndex(file_path, chromosome, position, n_bases, fai):
     build = open(file_path, "r")
     fasta_index = open(fai, "r")
     start = 0
+
+    try:
+        position = int(position)
+    except ValueError:
+        raise ValueError("Chromosome position must be an integer")
+    
     if "chr" not in chromosome:
         chromosome = "chr" + chromosome
     for line in fasta_index:
         if chromosome == line.strip().split("\t")[0]:
             start = int(line.strip().split("\t")[1])
-    position_to_reach = start + (int(position) - n_bases) + round((int(position) - n_bases)/50)
+    position_to_reach = start + (int(position) - n_bases) + int((int(position) - n_bases)/50)
     build.seek(position_to_reach, 0) # go to the position to reach from the beginnig of the file
-    query = build.read(n_bases * 2 + round((n_bases * 2)/50))
+    query = build.read(n_bases * 2 + int((n_bases * 2)/50))
     build.close()
     fasta_index.close()
+    query = query.replace("\n", "")
+    query = '\n'.join(query[i:i+50] for i in range(0, len(query), 50))
     return(query)
 
 def get_bases(file_path, chromosome, position, n_bases): 
     query = ""
     chromosome_position = 0
+
+    try:
+        position = int(position)
+    except ValueError:
+        raise ValueError("Chromosome position must be an integer")
+    
     if "chr" not in chromosome:
         chromosome = "chr" + chromosome
     with open(file_path, "r") as build:
@@ -40,10 +47,11 @@ def get_bases(file_path, chromosome, position, n_bases):
                     if line.strip()[1:] == chromosome:
                         break
         chromosome_position = build.tell()    
-        position_to_reach = chromosome_position + (int(position) - n_bases) + round((int(position) - n_bases)/50)
+        position_to_reach = chromosome_position + (int(position) - n_bases) + int((int(position) - n_bases)/50)
         build.seek(position_to_reach, 0)
-        query = build.read(n_bases * 2 + round((n_bases * 2)/50))
-        
+        query = build.read(n_bases * 2 + int((n_bases * 2)/50))
+        query = query.replace("\n", "")
+        query = '\n'.join(query[i:i+50] for i in range(0, len(query), 50))
         return(query)
 
 '''
@@ -57,8 +65,9 @@ def blat_launcher(reference_fa, input_fa, outputname):
 
     print("Launching blat!")
     # blat launch
-    command_to_run = "blat -noHead " + reference_fa + " " + input_fa + " " + outputname + ".pls"
+    command_to_run = "blat -noHead " + reference_fa + " " + input_fa + " " + outputname + ".psl -out=psl -tileSize=18"
     system(command_to_run)
+    
 
 '''
 Function description
@@ -109,10 +118,11 @@ fastq generator from:
 TODO PASTE GIT URL HERE TODO
 '''
 
-def fastq_gen(fasta, n_reads, window):
+def fastq_gen(fasta, n_reads, window, temporary_folder):
+    from os import system
     print("FASTA pre-processing...")
     
-    with open("processed.fasta", "w") as out_fa:
+    with open(temporary_folder + "/processed.fa", "w") as out_fa:
         with open(fasta, "r") as input_fa:
             for line in input_fa:
                 if line.startswith(">"):
@@ -121,10 +131,11 @@ def fastq_gen(fasta, n_reads, window):
                 out_fa.write(line.strip())
 
     print("Generating fastq...")
-    command = "python fastq_generator.py generate_mapped_fastq_SE processed.fasta " + str(window) + " " + str(n_reads) + " > fake.fastq"
+    command = "python fastq_generator.py generate_mapped_fastq_SE " + temporary_folder + "/processed.fa " + str(window) + " " + str(n_reads) + " > " + temporary_folder + "/fake.fastq"
+    system(command)
     print("Generated!")
     print("Mutating fastq...")
-    command = "python mutation_generator.py fake.fastq fake_mutated.fastq " + str(window)
+    command = "python mutation_generator.py " + temporary_folder + "/fake.fastq" + temporary_folder + "/fake_mutated.fastq " + str(window)
     from os import system
     system(command)
     #command = "rm fake.fastq"
@@ -133,10 +144,10 @@ def fastq_gen(fasta, n_reads, window):
 MAPPER
 '''
 
-def mapper(bwa_path: str, t: int) -> None:
+def mapper(bwa_path: str, t: int, temporary_folder: str) -> None:
     import os
 
-    fastq = "fake_mutated.fastq.gz"
+    fastq = temporary_folder + "/fake_mutated.fastq.gz"
     if not os.path.isfile(fastq):
         print("gzipping...")
         os.system(f"gzip {fastq[:-3]}")
@@ -199,4 +210,34 @@ def read_counter(bed_file, chromosome: str, position: int, window: int) -> None:
                 mismapped_qual.append(int(mapping_quality))
         results = [count_mapped, count_mismapped, mean(mapped_qual), mean(mismapped_qual), round((count_mismapped/(count_mapped + count_mismapped))*100, 2)]
         return(results)
+    
 
+def modify_base(ref_fasta, query, position, base, out_file):
+    chromosome_position = 0
+    out = open(out_file, "w")
+    with open(ref_fasta, "rb") as build:
+        line = build.readline().decode()
+        if line != query: # avoid skipping first line     
+            while line:
+                line = build.readline().decode()
+                if line == query:
+                    break
+        chromosome_position = build.tell()
+        position_to_reach = chromosome_position + int(position) + int(int(position)/50) # correct the position counting "\n"s 1 every 50 bases
+        build.seek(0,0)
+        string = build.read(position_to_reach - len(base))
+        if build.read(1).decode() == "\n":
+            build.seek(-2,1)
+            out.write(string.decode()[:-len(base)] + base)
+            build.read(1)
+        else:
+            out.write(string.decode() + base) 
+        for line in build.readlines():
+            out.write(line.decode())
+    out.close()
+
+
+def validate_sequence(sequence):
+    from re import match
+    if not match('^[ATGC]+$', sequence) or len(sequence) > 1:
+        raise ValueError("The provided alternative base is invalid. Only single-character bases A, T, C, and G are allowed as alternatives.")

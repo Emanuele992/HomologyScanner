@@ -151,3 +151,27 @@ def write_coordinates(chromosome: str, start_pos: str, end_pos: str, filename: s
     with open(filename + ".txt", "w") as output:
         for i in range(int(start_pos),int(end_pos)):
             output.write(chromosome + "\t" + str(i) + "\n")
+
+def modify_base(ref_fasta, chromosome, position, base, out_file):
+    chromosome_position = 0
+    out = open(out_file, "w")
+    if "chr" not in chromosome:
+        chromosome = "chr" + chromosome
+    with open(ref_fasta, "r") as build:
+        line = build.readline()
+        if chromosome != "chr1": # avoid skipping first chromosome
+            while line:
+                line = build.readline()
+                if line.startswith('>'):
+                    print(line)
+                    if line.strip()[1:] == chromosome:
+                        break
+        chromosome_position = build.tell()    
+        position_to_reach = chromosome_position + int(position) + round(int(position)/50)# correct the position counting "\n"s 1 every 50 bases
+        build.seek(0,0)
+        out.write(build.read(position_to_reach - 1) + base) 
+        build.read(1)
+        for line in build.readlines():
+            out.write(line)
+        
+        
