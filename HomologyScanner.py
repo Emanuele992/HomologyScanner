@@ -339,11 +339,27 @@ def main():
                 mutation_flag = False # set mutation flag false every line to skip lines without mutation to insert
                 split_line = line.strip().split("\t")
                 if len(split_line) == 4:
-                    mutation_flag = True
-                if len(split_line) != 2 and len(split_line) != 4:
-                    raise ValueError("Columns number must be 2 or 4")
+                    mut_pos = split_line[2]
+                    if mut_pos != "NA":
+                        try:
+                            mut_pos = int(mut_pos)
+                        except ValueError:
+                            raise ValueError("Mutation position must be an integer")
+                        if int(mut_pos) > args.window * 2:
+                            raise ValueError("Mutation position off the sequence")
+                    else:
+                        continue
+                    alt = split_line[3] 
+                    if alt != "NA": 
+                        scanner.validate_sequence(alt) # check if the mutation provided contains inconsistencies
+                    else:
+                        continue
+                    mutation_flag = True             
+                else:
+                    raise ValueError("Columns number must be 4")
                 chromosome =  split_line[0]
                 position = split_line[1]
+
                 query_string = ">query_" + chromosome + "_" + str(position) + "_" + str(args.window) + "\n"
                 print("query: " + chromosome + " " + position, end = "... ")
                 file_to_query.write(query_string)
@@ -362,16 +378,7 @@ def main():
                     # Mutating!
                     temporary_query_file_input = temporary_folder_path + "/temporary_query.fa"
                     temporary_query_file_output = temporary_folder_path + "/temporary_query_mutated.fa"
-                    mut_pos = split_line[2]
-                    try:
-                        mut_pos = int(mut_pos)
-                    except ValueError:
-                        raise ValueError("Mutation position must be an integer")
-                    if int(mut_pos) > args.window * 2:
-                        raise ValueError("Mutation position off the sequence")
-                    alt = split_line[3] 
-                    scanner.validate_sequence(alt) # check if the mutation provided contains inconsistencies
-
+                    
                     # temporary output
                     with open(temporary_query_file_input, "w") as temp_query:
                         temp_query.write(query_string)
@@ -412,10 +419,11 @@ def main():
                 
                 # check if a position has been already queried
                 if key in sequencing_results_dict.keys():
-                    raise KeyError("The program cannot handle the variant " + " ".join(key.split("_")) + " because it is present multiple times")
-                
+                    raise KeyError("The program cannot handle the variant " + " ".join(key.split("_")) + ", it is present multiple times")
                 with support_functions.Spinner():
                     sequencing_results_dict[key] = scanner.read_counter(temporary_folder_path + "/fake_mutated.fastq_sorted.bed", chromosome, position, args.window)
+                
+                os.system(command="ll " + temporary_folder_path + "/fake*") # removing mapper intermediate outputs TODO
 
                 file_to_query.write(query + "\n")
             file_to_query.close()
@@ -451,13 +459,16 @@ def main():
                     if position in sequencing_results_dict.keys():
                         output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score)  + "\t" + "\t".join(map(str, sequencing_results_dict[position])) + "\n")
                     else:
-                        output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score)  + "\t" + "\t".join(map(str, sequencing_results_dict[position])) + "\n")
+                        output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score)  + "\tNA\tNA\tNA\tNA\tNA\n")
                     match_list = []
                     mismatch_list = []
                 else:
                     print("position (chr,position,window): " + ",".join(position.split("_")[1:len(position.split("_"))]), end = "... ")
-                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + "0" + "\t" + "\t".join(map(str, sequencing_results_dict[position])) + "\n")
-                
+                    if position in sequencing_results_dict.keys():
+                        output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score)  + "\t" + "\t".join(map(str, sequencing_results_dict[position])) + "\n")
+                    else:
+                        output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score)  + "\tNA\tNA\tNA\tNA\tNA\n")
+                    
             
                 print("Done!")
                 
