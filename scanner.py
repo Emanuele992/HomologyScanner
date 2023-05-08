@@ -119,26 +119,33 @@ TODO PASTE GIT URL HERE TODO
 '''
 
 def fastq_gen(fasta, n_reads, window, temporary_folder):
-    from os import system
+    from os import system, path
     print("FASTA pre-processing...")
     
+    if path.isfile(fasta):
+        input_fa = open(fasta, "r")
+    else:
+        input_fa = fasta
+
     with open(temporary_folder + "/processed.fa", "w") as out_fa:
-        with open(fasta, "r") as input_fa:
-            for line in input_fa:
-                if line.startswith(">"):
-                    out_fa.write(line)
-                    continue
-                out_fa.write(line.strip())
+        for line in input_fa:
+            if line.startswith(">"):
+                out_fa.write(line)
+                continue
+            out_fa.write(line.strip())
+    
+    if path.isfile(fasta):
+        input_fa.close()
 
     print("Generating fastq...")
     command = "python fastq_generator.py generate_mapped_fastq_SE " + temporary_folder + "/processed.fa " + str(window) + " " + str(n_reads) + " > " + temporary_folder + "/fake.fastq"
     system(command)
     print("Generated!")
     print("Mutating fastq...")
-    command = "python mutation_generator.py " + temporary_folder + "/fake.fastq" + temporary_folder + "/fake_mutated.fastq " + str(window)
-    from os import system
+    command = "python mutation_generator.py " + temporary_folder + "/fake.fastq " + temporary_folder + "/fake_mutated.fastq " + str(window)
     system(command)
-    #command = "rm fake.fastq"
+    command = "rm " + temporary_folder + "/fake.fastq"
+    system(command) 
 
 '''
 MAPPER
