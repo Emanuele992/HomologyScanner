@@ -336,6 +336,7 @@ def main():
 
         with open(args.input_file) as position_list:
             for line in position_list:
+                mutation_flag = False # set mutation flag false every line to skip lines without mutation to insert
                 split_line = line.strip().split("\t")
                 if len(split_line) == 4:
                     mutation_flag = True
@@ -355,6 +356,8 @@ def main():
                     query = scanner.get_bases_wIndex(args.reference, chromosome, position, args.window, args.fasta_index)
                     end = time()
                 print("elapsed time: " + str(round(end - start, 2)) + "s")
+
+                # MUTATIONS 
                 if mutation_flag:
                     # Mutating!
                     temporary_query_file_input = temporary_folder_path + "/temporary_query.fa"
@@ -364,10 +367,10 @@ def main():
                         mut_pos = int(mut_pos)
                     except ValueError:
                         raise ValueError("Mutation position must be an integer")
+                    if int(mut_pos) > args.window * 2:
+                        raise ValueError("Mutation position off the sequence")
                     alt = split_line[3] 
                     scanner.validate_sequence(alt) # check if the mutation provided contains inconsistencies
-                    
-                     # keep \n it is not stripped in the scanner funciton!
 
                     # temporary output
                     with open(temporary_query_file_input, "w") as temp_query:
@@ -383,38 +386,39 @@ def main():
                                 continue
                             modified_query = modified_query + line
                     query = modified_query
+                
+                # READ GENERATION MODE -R
+                if args.read_generation_mode == True:
+                    scanner.fastq_gen(query, args.reads_number, args.window, temporary_folder_path)
+                    print("Mutated!")
+
+                if args.bwamem_index is None:
+                    print("bwa-mem index missing... assuming reference path...")
+                    index_folder = args.reference.split("/")[-1]
+                    index_folder = index_folder.split(".")[0]
+                    bwa =  "/".join(args.reference.split("/")[:-1]) + "/" + index_folder + "/"
+                    print("trying path: " + args.bwamem_index)
+                    if not os.path.exists(args.bwamem_index) or index_folder not in os.listdir(args.bwamem_index):
+                        raise NotADirectoryError("The directory does not exists or " + args.bwamem_index.split("/")[-1] + " is the incorrect reference")
+                else:
+                    print("trying path: " + bwa)
+                    if not os.path.exists(bwa) or index_folder not in os.listdir(bwa):
+                        raise NotADirectoryError("The directory does not exists or " + index_folder + " is the incorrect reference")
+                
+                # MAPPING 
+                scanner.mapper(args.bwamem_index, args.treads, temporary_folder_path)
+
+                key = chromosome + "_" + position + "_" + args.window
+                
+                # check if a position has been already queried
+                if key in sequencing_results_dict.keys():
+                    raise KeyError("The program cannot handle the variant " + " ".join(key.split("_")) + " because it is present multiple times")
+                
+                with support_functions.Spinner():
+                    sequencing_results_dict[key] = scanner.read_counter(temporary_folder_path + "/fake_mutated.fastq_sorted.bed", chromosome, position, args.window)
 
                 file_to_query.write(query + "\n")
             file_to_query.close()
-            '''
-                    if args.read_generation_mode == True:
-                        print("Read Generator mode...")
-
-                        # Splitting input fasta in different temporary fasta files
-
-                        with support_functions.Spinner():
-                            scanner.fastq_gen(input_fa, args.reads_number, args.window, temporary_folder_path) 
-
-                        print("...fastq generated!")
-                        if args.bwamem_index is None:
-                            print("bwa-mem index missing... assuming reference path...")
-                            index_folder = args.reference.split("/")[-1]
-                            index_folder = index_folder.split(".")[0]
-                            bwa =  args.reference + "/" + index_folder
-                            print(bwa)
-                            sys.exit()
-
-                        with support_functions.Spinner():
-                            scanner.mapper(args.bwamem_index, args.treads, temporary_folder_path)
-
-                        key = chromosome + "_" + position + "_" + args.window
-                        
-                        # TO MODIFY
-                        if key in sequencing_results_dict.keys():
-                            raise KeyError("Ther variant " + " ".join(key.split("_")) + " is present multiple times")
-
-                        with support_functions.Spinner():
-                            sequencing_results_dict[key] = scanner.read_counter(temporary_folder_path + "/fake_mutated.fastq_sorted.bed", chromosome, position, args.window)'''
                 
         # Launching BLAT
         scanner.blat_launcher(args.reference, input_fa, args.blat_output_prefix) 
@@ -442,13 +446,19 @@ def main():
                     
                     print("position (chr,position,window): " + ",".join(position.split("_")[1:len(position.split("_"))]), end = "... ")
                     score = scanner.homology_score_calculator(match_list, mismatch_list, args.window)
-                    output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score)  + "\t" + "\t".join(map(str, sequencing_results_dict[position])) + "\n")
+
+                    # check sequencing results dictionary key existence
+                    if position in sequencing_results_dict.keys():
+                        output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score)  + "\t" + "\t".join(map(str, sequencing_results_dict[position])) + "\n")
+                    else:
+                        output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + str(score)  + "\t" + "\t".join(map(str, sequencing_results_dict[position])) + "\n")
                     match_list = []
                     mismatch_list = []
                 else:
                     print("position (chr,position,window): " + ",".join(position.split("_")[1:len(position.split("_"))]), end = "... ")
                     output_file.write("\t".join(position.split("_")[1:len(position.split("_"))]) + "\t" + "0" + "\t" + "\t".join(map(str, sequencing_results_dict[position])) + "\n")
                 
+            
                 print("Done!")
                 
 
