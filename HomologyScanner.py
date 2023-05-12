@@ -279,9 +279,14 @@ def main():
                 print("bwa-mem index missing... assuming reference path...")
                 index_folder = args.reference.split("/")[-1]
                 index_folder = index_folder.split(".")[0]
-                bwa =  args.reference + "/" + index_folder
-                print(bwa)
-                sys.exit()
+                bwa =  "/".join(args.reference.split("/")[:-1]) + "/" + index_folder + "/"
+                print("trying path: " + bwa)
+                if not os.path.exists(bwa) or index_folder not in os.listdir(bwa):
+                    raise NotADirectoryError("The directory does not exists or " + index_folder + " is the incorrect reference")
+            else:
+                print("trying path: " + "/".join(args.bwamem_index.split("/")[:-1]))
+                if not os.path.exists("/".join(args.bwamem_index.split("/")[:-1])):
+                    raise NotADirectoryError("The directory does not exists")
 
             with support_functions.Spinner():
                 scanner.mapper(args.bwamem_index, args.treads, temporary_folder_path)
@@ -399,31 +404,32 @@ def main():
                     scanner.fastq_gen(query, args.reads_number, args.window, temporary_folder_path)
                     print("Mutated!")
 
-                if args.bwamem_index is None:
-                    print("bwa-mem index missing... assuming reference path...")
-                    index_folder = args.reference.split("/")[-1]
-                    index_folder = index_folder.split(".")[0]
-                    bwa =  "/".join(args.reference.split("/")[:-1]) + "/" + index_folder + "/"
-                    print("trying path: " + args.bwamem_index)
-                    if not os.path.exists(args.bwamem_index) or index_folder not in os.listdir(args.bwamem_index):
-                        raise NotADirectoryError("The directory does not exists or " + args.bwamem_index.split("/")[-1] + " is the incorrect reference")
-                else:
-                    print("trying path: " + bwa)
-                    if not os.path.exists(bwa) or index_folder not in os.listdir(bwa):
-                        raise NotADirectoryError("The directory does not exists or " + index_folder + " is the incorrect reference")
-                
-                # MAPPING 
-                scanner.mapper(args.bwamem_index, args.treads, temporary_folder_path)
+                    if args.bwamem_index is None:
+                        print("bwa-mem index missing... assuming reference path...")
+                        index_folder = args.reference.split("/")[-1]
+                        index_folder = index_folder.split(".")[0]
+                        bwa =  "/".join(args.reference.split("/")[:-1]) + "/" + index_folder + "/"
+                        print("trying path: " + bwa)
+                        if not os.path.exists(bwa) or index_folder not in os.listdir(bwa):
+                            raise NotADirectoryError("The directory does not exists or " + index_folder + " is the incorrect reference")
+                    else:
+                        print("trying path: " + "/".join(args.bwamem_index.split("/")[:-1]))
+                        if not os.path.exists("/".join(args.bwamem_index.split("/")[:-1])):
+                            raise NotADirectoryError("The directory does not exists")
+                    
+                    # MAPPING 
+                    scanner.mapper(args.bwamem_index, args.treads, temporary_folder_path)
 
-                key = chromosome + "_" + position + "_" + args.window
-                
-                # check if a position has been already queried
-                if key in sequencing_results_dict.keys():
-                    raise KeyError("The program cannot handle the variant " + " ".join(key.split("_")) + ", it is present multiple times")
-                with support_functions.Spinner():
-                    sequencing_results_dict[key] = scanner.read_counter(temporary_folder_path + "/fake_mutated.fastq_sorted.bed", chromosome, position, args.window)
-                
-                os.system(command="ll " + temporary_folder_path + "/fake*") # removing mapper intermediate outputs TODO
+                    key = chromosome + "_" + position + "_" + str(args.window)
+                    
+                    # check if a position has been already queried
+                    if key in sequencing_results_dict.keys():
+                        raise KeyError("The program cannot handle the variant " + " ".join(key.split("_")) + ", it is present multiple times")
+                    with support_functions.Spinner():
+                        sequencing_results_dict[key] = scanner.read_counter(temporary_folder_path + "/fake_mutated.fastq_sorted.bed", chromosome, position, args.window)
+                    
+                    print(sequencing_results_dict)
+                    os.system(command = "rm " + temporary_folder_path + "/fake*") # removing mapper intermediate outputs
 
                 file_to_query.write(query + "\n")
             file_to_query.close()

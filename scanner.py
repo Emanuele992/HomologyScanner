@@ -101,7 +101,7 @@ def get_blat_info(blat_out):
     chromosomes_index = 13
     position_dict = {}
 
-    with open(blat_out + ".pls", "r") as blat_out:
+    with open(blat_out + ".psl", "r") as blat_out:
         for position in blat_out:
             position = position.strip().split("\t")
             if position[position_index] not in position_dict.keys():
@@ -189,7 +189,7 @@ def mapper(bwa_path: str, t: int, temporary_folder: str) -> None:
     print("Done!")
 
 def read_counter(bed_file, chromosome: str, position: int, window: int) -> None:
-
+    position = int(position)
     def mean(numbers):
             if (len(numbers) == 0):
                 return "NA"
