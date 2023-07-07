@@ -1,5 +1,3 @@
-Certainly! Here's an example README.md file in a GitHub style for the provided code:
-
 # Homology Scanner
 
 Homology Scanner is a Python script that calculates the homology level of genomic positions on an input sequence, aiding in the analysis of read mismapping probabilities. The script utilizes sequence alignment tools and provides various modes of operation for generating reads, introducing mutations, and computing homology scores.
